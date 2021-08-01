@@ -1,4 +1,4 @@
-# manual_cicd
+# MinimalCI
 
 In case git asks you for the ssh passphrase, run the following before starting the process:
 
