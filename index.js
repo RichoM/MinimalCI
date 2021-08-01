@@ -1,17 +1,22 @@
 const cp = require('child_process');
 const kill = require('tree-kill');
+const fs = require("fs").promises;
 
-// TODO(Richo): Make these parameters configurable by file?
-const CWD = "temp/__test_cicd";
-const INTERVAL = 10;
-const START_CMDS = ["node ."];
+// NOTE(Richo): Default config
+let config = {
+  cwd: "temp/__test_cicd", // Git repository
+  interval: 10, // Seconds between checks
+  start: [{command: "node ."}],
+  stop: []
+};
 
 let childs = null;
 
-function exec(cmd) {
+function exec(cmd, options) {
   return new Promise((resolve, reject) => {
-    let cwd = CWD;
-    let p = cp.exec(cmd, {cwd: cwd}, (error, stdout, stderr) => {
+    let opts = options || {};
+    if (!opts.cwd) { opts.cwd = config.cwd; }
+    let p = cp.exec(cmd, opts, (error, stdout, stderr) => {
       if (error) {
         reject({ error: error, stdout: stdout, stderr: stderr });
       } else {
@@ -24,14 +29,17 @@ function exec(cmd) {
     p.stdout.on("data", (data) => { console.log(data.toString().trim()); });
     p.stderr.on("data", (data) => { console.log(data.toString().trim()); });
     p.on('exit', (code) => { console.log("--- Process (PID: " + p.pid + ") exited with code " + code) });
-    console.log("--- Started process (PID: " + p.pid + ") $ " + (cwd ? cwd : ".") + " > " + cmd);
+    console.log("--- Started process (PID: " + p.pid + ") $ " + (opts.cwd ? opts.cwd : ".") + " > " + cmd);
     */
   });
 }
 
-function start(cmd) {
+function start(command) {
   return new Promise((res, rej) => {
-    child = cp.exec(cmd, {cwd: CWD});
+    let cmd = command.command;
+    let opts = command.options || {};
+    if (!opts.cwd) { opts.cwd = config.cwd; }
+    child = cp.exec(cmd, opts);
     child.on("error", rej);
     child.on("spawn", () => res(child));
     log("- Starting process: " + child.pid);
@@ -72,8 +80,8 @@ async function updateRepository() {
 async function startAll() {
   try {
     let temp = [];
-    for (let i = 0; i < START_CMDS.length; i++) {
-      temp.push(await start(START_CMDS[i]));
+    for (let i = 0; i < config.start.length; i++) {
+      temp.push(await start(config.start[i]));
     }
     childs = temp;
   } catch (err) {
@@ -91,22 +99,44 @@ async function stopAll() {
     console.error("Error while stopping child processes!");
     console.error(err);
   }
+  
+  for (let i = 0; i < config.stop.length; i++) {
+    // TODO(Richo): Handle individual errors...
+    let cmd = config.stop[i].command;
+    let opts = config.stop[i].options || {};
+    await exec(cmd, opts);
+  }
+}
+
+async function readConfigFile() {
+  try {
+    let data = await fs.readFile("config.json");
+    let str = data.toString();
+    config = JSON.parse(str);
+  } catch (err) {
+    console.error("Error while reading configuration file!");
+    console.error(err);
+  }
 }
 
 async function main() {
+  await readConfigFile();
+  log(JSON.stringify(config, null, 2));
   await startAll();
   while (true) {
     let changes = await checkRepository();
     if (changes) {
       log("Changes found. Updating...");
       await stopAll();
+      await sleep(1000); // Just in case
       await updateRepository();
+      await sleep(1000); // Just in case
       await startAll();
     } else {
       log("Repository up to date. Nothing to do.");
     }
-    log(`Sleeping for ${INTERVAL} seconds...`);
-    await sleep(INTERVAL * 1000);
+    log(`Sleeping for ${config.interval} seconds...`);
+    await sleep(config.interval * 1000);
   }
 }
 

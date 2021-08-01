@@ -1,0 +1,13 @@
+{
+  "cwd": "temp/__test_cicd",
+  "interval": 10,
+  "start": [
+    {"command": "echo RICHO > a.txt"},
+    {"command": "echo CAPO > b.txt "},
+    {"command": "node ."}
+  ],
+  "stop": [
+    {"command": "rm a.txt"},
+    {"command": "rm b.txt "}
+  ]
+}
