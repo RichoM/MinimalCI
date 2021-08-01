@@ -8,4 +8,4 @@ It should prompt you for the ssh passphrase once and then remember it for the re
 
 To start the process in development mode:
 
-    $ npx nodemon --inspect .
+    $ npm run dev

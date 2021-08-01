@@ -1,4 +1,5 @@
 const cp = require('child_process');
+const kill = require('tree-kill');
 
 // TODO(Richo): Make these parameters configurable by file?
 const CWD = "temp/__test_cicd";
@@ -18,10 +19,29 @@ function exec(cmd) {
         resolve(stdout);
       }
     });
+    // TODO(Richo): The following should only be logged to a debug file or something...
+    /*
     p.stdout.on("data", (data) => { console.log(data.toString().trim()); });
     p.stderr.on("data", (data) => { console.log(data.toString().trim()); });
     p.on('exit', (code) => { console.log("--- Process (PID: " + p.pid + ") exited with code " + code) });
     console.log("--- Started process (PID: " + p.pid + ") $ " + (cwd ? cwd : ".") + " > " + cmd);
+    */
+  });
+}
+
+function start(cmd) {
+  return new Promise((res, rej) => {
+    child = cp.exec(cmd, {cwd: CWD});
+    child.on("error", rej);
+    child.on("spawn", () => res(child));
+    log("- Starting process: " + child.pid);
+  });
+}
+
+function stop(child) {
+  return new Promise(res => {
+    log("- Stopping process: " + child.pid);
+    kill(child.pid, "SIGTERM", res);
   });
 }
 
@@ -29,60 +49,63 @@ function log(str) { console.log(str); }
 
 function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 
-async function loop() {
+async function checkRepository() {
   try {
     await exec("git remote update");
     var data = await exec("git status");
-    if (data.match("Your branch is behind")) {
-      log("Stopping server...");
-      await stop();
-      log("Updating repository...");
-      await exec("git pull");
-      log("Restarting server...");
-      await start();
-    } else {
-      log("Up to date.");
-    }
+    return data.match("Your branch is behind");
   } catch (err) {
-    console.error("Error while checking changes!");
+    console.error("Error while checking repository for changes!");
     console.error(err);
   }
 }
 
-async function start() {
-  let temp = [];
-  const start_fn = (cmd) => new Promise((res, rej) => {
-    log("Running: " + cmd);
-    child = cp.exec(cmd, {cwd: CWD});
-    child.on("error", rej);
-    child.on("spawn", res);
-    temp.push(child);
-  });
-  for (let i = 0; i < START_CMDS.length; i++) {
-    let cmd = START_CMDS[i];
-    await start_fn(cmd);
+async function updateRepository() {
+  try {
+    await exec("git pull");
+  } catch (err) {
+    console.error("Error while updating repository!");
+    console.error(err);
   }
-  childs = temp;
 }
 
-async function stop() {
-  if (!childs) return;
-  let temp = childs;
-  childs = null;
-  await Promise.all(temp.map(child => new Promise(res => {
-    child.on("exit", res);
-    console.log(child.kill());
-  })));
+async function startAll() {
+  try {
+    let temp = [];
+    for (let i = 0; i < START_CMDS.length; i++) {
+      temp.push(await start(START_CMDS[i]));
+    }
+    childs = temp;
+  } catch (err) {
+    console.error("Error while starting child processes!");
+    console.error(err);
+  }
+}
+
+async function stopAll() {
+  try {
+    if (!childs) return;
+    await Promise.all(childs.map(stop));
+    childs = null;
+  } catch (err) {
+    console.error("Error while stopping child processes!");
+    console.error(err);
+  }
 }
 
 async function main() {
-  await start();
-  console.log(childs);
-  await sleep(5000);
-  await stop();
-  return;
+  await startAll();
   while (true) {
-    await loop();
+    let changes = await checkRepository();
+    if (changes) {
+      log("Changes found. Updating...");
+      await stopAll();
+      await updateRepository();
+      await startAll();
+    } else {
+      log("Repository up to date. Nothing to do.");
+    }
+    log(`Sleeping for ${INTERVAL} seconds...`);
     await sleep(INTERVAL * 1000);
   }
 }

@@ -1,0 +1,24 @@
+{
+  "name": "minimalci",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "npx nodemon --ignore temp/ --inspect .",
+    "start": "node ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RichoM/MinimalCI.git"
+  },
+  "author": "Ricardo Moran",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/RichoM/MinimalCI/issues"
+  },
+  "homepage": "https://github.com/RichoM/MinimalCI#readme",
+  "dependencies": {
+    "tree-kill": "^1.2.2"
+  }
+}
