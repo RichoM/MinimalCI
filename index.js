@@ -2,6 +2,7 @@ const cp = require('child_process');
 const kill = require('tree-kill');
 const fs = require("fs").promises;
 
+
 // NOTE(Richo): Default config
 let config = {
   cwd: "temp/__test_cicd", // Git repository
@@ -40,6 +41,8 @@ function start(command) {
     let opts = command.options || {};
     if (!opts.cwd) { opts.cwd = config.cwd; }
     child = cp.exec(cmd, opts);
+    child.stdout.on("data", data => console.log(`>${child.pid}> ${data.toString().trim()}`));
+    child.stderr.on("data", data => console.error(`>${child.pid}> ${data.toString().trim()}`));
     child.on("error", rej);
     child.on("spawn", () => res(child));
     log("- Starting process: " + child.pid);
@@ -99,7 +102,7 @@ async function stopAll() {
     console.error("Error while stopping child processes!");
     console.error(err);
   }
-  
+
   for (let i = 0; i < config.stop.length; i++) {
     // TODO(Richo): Handle individual errors...
     let cmd = config.stop[i].command;
